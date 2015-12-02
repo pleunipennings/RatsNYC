@@ -1,0 +1,61 @@
+########################
+### Author: Arbel Harpak
+### Start date: 3/14/15
+### Last update: 3/30/15
+### pre-processing for running selection scans on 15 rat raw VCFs received from New York Genome Center
+### This code takes the 15 raw haplotype GVCFs (after corrupted zips have been fixed) and generates a genotype GVCF file.
+########################
+
+## Download fasta reference from UCSC and 
+# in fastaRef folder, target folder for fasta business. Note this needs to be run in the main / download node and doesn't work on an interactive node for some reason.
+
+wget --timestamping 'tp://hgdownload.cse.ucsc.edu/goldenPath/rn5/bigZips/rn5.2bit'
+./twoBitToFa rn5.2bit rn5.fasta
+
+# login to an interactive node with plenty of ram but in extended queue
+qlogin -l h_vmem=10g -q extended
+# Get rid of contigs that don't appear in the haplotype files. These are the ambiguous contigs.
+awk 'BEGIN{flag=0;}{if($0~/^>/){if (length($0)<=6 && substr($0,2,3)=="chr") {flag=1;print ">"substr($0,5);}else{flag=0;}} else{if(flag==1) print $0;}}' rn5.fasta > rn5edited.fasta
+# verify structure of edited fasta file
+awk '{if(length($0)!=50) print $0;}' rn5edited.fasta
+# sort contigs to match the order in haplotype files
+awk 'BEGIN{flag=0;}{if($0~/^>/){if (length($0)==2 && substr($0,2,2) != "X" && substr($0,2,2) != "M") {flag=1} else{flag=0}} {if(flag==1) print $0;}}' rn5edited.fasta > temp1.fasta
+awk 'BEGIN{flag=0;}{if($0~/^>/){if (length($0)==2 && substr($0,2,2) != "X" && substr($0,2,2) != "M") {flag=1} else{flag=0}} {if(flag==0) print $0;}}' rn5edited.fasta > temp2.fasta
+cat temp1.fasta temp2.fasta > rn5edited.fasta
+
+# Prepare the FASTA file's dictionary and index files
+module add picard-tools/1.92
+java -Xmx4G -jar /srv/gs1/software/picard-tools/1.92/CreateSequenceDictionary.jar R=rn5edited.fasta O=rn5edited.dict
+module load samtools/1.2
+
+# make sure a rn5.fai file was created.
+java -Xmx4G -jar /srv/gs1/software/picard-tools/1.92/CreateSequenceDictionary.jar R=rn5edited.fasta O=rn5edited.dict
+# now make sure a rn5edited.dict file was created.
+module load samtools/1.2
+samtools faidx rn5edited.fasta
+# now make sure a rn5edited.fai file was created.
+
+### Combining gvcfs into one variant calling file with all haplotypes
+# run in an interactive session but in a virtual screen so that process doesn't die if your computer disconnects for some reason
+screen -S ratLong
+module add gatk/3.2.2
+module load gatk/3.2.2
+# CTRL +a , d to get back to login node
+# to get back to ratLong screen:
+screen -r ratLong
+module load gatk/3.1.1
+# in rats/data/haplotypes folder, where all individual rats GVCFs should be:
+java -Xmx30G -jar /srv/gs1/software/gatk/gatk-3.1.1/GenomeAnalysisTK-nightly-2014-04-07-g8f6ff32/GenomeAnalysisTK.jar -T GenotypeGVCFs -R /srv/gsfs0/projects/pritchard/Arbel/rats/data/fastaRef/rn5edited.fasta --variant ./RS1-013.haplotypeCalls.raw.gvcf.vcf --variant ./RP1-01.haplotypeCalls.raw.gvcf.vcf --variant ./Rn82.haplotypeCalls.raw.gvcf.vcf --variant ./Rn99.haplotypeCalls.raw.gvcf.vcf --variant ./Rn63.haplotypeCalls.raw.gvcf.vcf --variant ./Rn78.haplotypeCalls.raw.gvcf.vcf --variant ./Rn50.haplotypeCalls.raw.gvcf.vcf --variant ./Rn35.haplotypeCalls.raw.gvcf.vcf --variant ./Rn20.haplotypeCalls.raw.gvcf.vcf --variant ./Rn153.haplotypeCalls.raw.gvcf.vcf --variant ./Rn16.haplotypeCalls.raw.gvcf.vcf --variant ./Rn136.haplotypeCalls.raw.gvcf.vcf --variant ./Rn114.haplotypeCalls.raw.gvcf.vcf --variant ./RH2-06.haplotypeCalls.raw.gvcf.vcf --variant ./RH1-008.haplotypeCalls.raw.gvcf.vcf -o ./mergedGvcf10.vcf
+
+### unrelated - 
+### check two small raw gvcfs for Jason
+col=$1
+awk -v col="$col" 'BEGIN{FS=","}
+{
+	arr[$col]++
+}
+END{
+print "Column "col" has distinct value:"
+for (i in arr)
+print i
+}' RS1-013.haplotypeCalls.raw.gvcf.vcf
