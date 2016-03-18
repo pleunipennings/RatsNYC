@@ -1,0 +1,66 @@
+---
+title: "Rats_Visualization"
+author: "Pleuni"
+date: "February 12, 2016"
+output: html_document
+---
+
+
+Read the data and make some simple plots
+```{r}
+setwd("~/Dropbox/NYC Rats/Rscripts/")
+listfiles<-list.files("../results_15_rats/")
+pdf("HScanRats.pdf")
+par(mfrow=c(3, 1))
+for (i in 1:length(listfiles)){
+file=listfiles[i]
+X<-read.csv(paste("../results_15_rats/",file,sep=""),sep="\t")
+plot(X$x,X$H,type="l",main=paste("chromosome",i), xlab="location", ylab="H value")
+}
+dev.off()
+```
+
+Read the data again and store then in a dataframe
+```{r}
+Hvalues<-data.frame("x"=numeric(),"H"=numeric(),"chr"=c())
+i=1
+for (i in 1:length(listfiles)){
+    file=listfiles[i]
+    X<-read.csv(paste("../results_15_rats/",file,sep=""),sep="\t")
+    X$chr=i
+    Hvalues<-rbind(Hvalues,X)
+    }
+```
+
+Find 5 highest peaks per chromosome, give them red dot 
+Find highest peak, mask some space around it, find next highest peak. 
+```{r}
+maskwindow=100000
+
+#pdf("HScanRats_peaks.pdf")
+
+#par(mfrow=c(3, 1))
+for (i in 1:length(listfiles)){
+    X<-Hvalues[Hvalues$chr==i,]
+    plot(X$x,X$H,type="l",main=paste("chromosome",i), xlab="location", ylab="H value",col=1)
+    peaks<-c()
+    for (j in 1:5){
+        location_peak=X$x[which.max(X$H)]
+        peaks<-c(peaks,location_peak)
+        X<-X[X$x<location_peak-maskwindow | X$x>location_peak+maskwindow,]
+        }
+    X<-Hvalues[Hvalues$chr==i,]
+    points(X$x[which(X$x%in%peaks)],X$H[which(X$x%in%peaks)],cex=2,col=2,pch=16)
+    }
+```
+
+
+To do: 
+
+1. get this script to github repo
+2. get data from rat genome browser (http://rgd.mcw.edu/fgb2/gbrowse/rgd_5/?source=rgd_5)
+3. make plots of peaks with zooms
+4. add info on genes 
+
+
+
